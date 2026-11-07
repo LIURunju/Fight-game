@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火柴人格斗游戏 - Stickman Fighter</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            user-select: none;
+            overflow: hidden;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #0f172a, #1e293b);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- 游戏主容器 -->
+    <div class="relative w-full max-w-4xl flex flex-col items-center">
+        <!-- 标题栏与 UI 布局 -->
+        <div class="w-full flex justify-between items-center mb-3 px-2">
+            <h1 class="text-3xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400">
+                火柴人格斗 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">FINAL VER</span>
+            </h1>
+            <div class="text-xs text-slate-400 flex gap-4">
+                <span>P1: <strong class="text-cyan-400">W A S D + U I J K</strong></span>
+                <span>P2: <strong class="text-rose-400">智能电脑 AI</strong></span>
+            </div>
+        </div>
+
+        <!-- 游戏画布区 -->
+        <div class="relative w-full aspect-[16/9] rounded-2xl overflow-hidden border border-slate-700/60 shadow-2xl">
+            <canvas id="gameCanvas" class="w-full h-full block"></canvas>
+
+            <!-- 准备/倒计时/胜负结算 Overlay -->
+            <div id="game-over-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center gap-4 hidden z-20">
+                <h2 id="winner-text" class="text-5xl font-black text-amber-400 tracking-wider">P1 胜利!</h2>
+                <button onclick="restartGame()" class="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-lg shadow-lg hover:shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+                    再次对决
+                </button>
+            </div>
+
+            <!-- 开局 Start 界面 -->
+            <div id="start-screen-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center gap-6 z-30">
+                <div class="text-center">
+                    <h2 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-400 mb-2">STICKMAN FIGHTER</h2>
+                    <p class="text-slate-400 text-sm">街机风格 · 经典搓招 · 智能AI对战</p>
+                </div>
+                <button onclick="initStartSequence()" class="px-10 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xl shadow-xl hover:shadow-cyan-500/30 transition-all transform hover:-translate-y-1 active:translate-y-0">
+                    START 游戏开始
+                </button>
+            </div>
+
+            <!-- 3 秒 Countdown 标识 -->
+            <div id="countdown-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none hidden z-10">
+                <span id="countdown-text" class="text-8xl font-black text-amber-400 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] animate-bounce">3</span>
+            </div>
+        </div>
+
+        <!-- 招式卡片说明 -->
+        <div class="w-full grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs">
+            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                <span class="text-cyan-400 font-bold block mb-1">基本拳脚</span>
+                <span class="text-slate-300">U: 轻拳 | J: 重拳</span><br>
+                <span class="text-slate-300">I: 轻脚 | K: 重脚</span>
+            </div>
+            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                <span class="text-cyan-400 font-bold block mb-1">波动拳 (S ➔ D + U/J)</span>
+                <span class="text-slate-300">飞行道具 / 0.5s 后摇</span>
+            </div>
+            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                <span class="text-amber-400 font-bold block mb-1">超级大波 (S ➔ D ➔ S ➔ D + U/J)</span>
+                <span class="text-slate-300">长按无限蓄力 / 吸附小波</span>
+            </div>
+            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                <span class="text-indigo-400 font-bold block mb-1">必杀特技</span>
+                <span class="text-slate-300">升龙拳: D ➔ S ➔ D + U/J</span><br>
+                <span class="text-slate-300">迅猛飞踢: S ➔ D + I/K</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 逻辑 JavaScript 全编 -->
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 450;
+        const GROUND_Y = 380;
+        const GRAVITY = 0.65;
+
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        let gameRunning = false;
+        let isCountingDown = false;
+        let countdownValue = 3;
+
+        // 按键监听表
+        const keys = {};
+
+        window.addEventListener('keydown', e => {
+            const key = e.key.toLowerCase();
+            if (!keys[key]) {
+                keys[key] = true;
+                if (player && gameRunning && !isCountingDown) {
+                    player.handleCommandBuffer(key);
+                }
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            const key = e.key.toLowerCase();
+            keys[key] = false;
+
+            // 释放超级大波
+            if ((key === 'u' || key === 'j') && player && player.state === 'charging') {
+                player.releaseSuperHadouken();
+            }
+        });
+
+        // 全局全局导出 START 方法
+        window.initStartSequence = function() {
+            document.getElementById('start-screen-overlay').classList.add('hidden');
+            restartGame();
+        };
+
+        function restartGame() {
+            document.getElementById('game-over-overlay').classList.add('hidden');
+            player = new Stickman(200, '#38bdf8', false);
+            ai = new Stickman(600, '#f43f5e', true);
+            projectiles = [];
+            attackEffects = [];
+            floatingTexts = [];
+            gameRunning = true;
+            startCountdown();
+        }
+
+        function startCountdown() {
+            isCountingDown = true;
+            countdownValue = 3;
+            const overlay = document.getElementById('countdown-overlay');
+            const textEl = document.getElementById('countdown-text');
+            overlay.classList.remove('hidden');
+            textEl.textContent = countdownValue;
+
+            const interval = setInterval(() => {
+                countdownValue--;
+                if (countdownValue > 0) {
+                    textEl.textContent = countdownValue;
+                } else if (countdownValue === 0) {
+                    textEl.textContent = 'FIGHT!';
+                } else {
+                    clearInterval(interval);
+                    overlay.classList.add('hidden');
+                    isCountingDown = false;
+                }
+            }, 800);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 飞行道具类
+        class Projectile {
+            constructor(x, y, dir, isSuper = false, chargeTime = 0) {
+                this.x = x;
+                this.y = y;
+                this.dir = dir;
+                this.isSuper = isSuper;
+
+                if (isSuper) {
+                    const chargeLevel = Math.floor(chargeTime / 30);
+                    this.speed = 6 * (1 + chargeLevel * 0.4);
+                    this.damage = 6 * (1 + chargeLevel * 0.5); // 基础伤害调整为原先 1/5
+                    this.radius = 18 + chargeLevel * 3;
+                } else {
+                    this.speed = 4.5;
+                    this.damage = 10;
+                    this.radius = 8;
+                }
+
+                this.active = true;
+                this.devouredCount = 0;
+            }
+
+            devourSmallWave() {
+                if (this.devouredCount < 6) {
+                    this.devouredCount++;
+                    this.damage += 2;
+                    this.speed += 0.5;
+                    this.radius += 4;
+                    return true;
+                }
+                return false;
+            }
+
+            update() {
+                this.x += this.dir * this.speed;
+                if (this.x < -50 || this.x > GAME_WIDTH + 50) {
+                    this.active = false;
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.isSuper ? '#f59e0b' : '#38bdf8';
+                ctx.shadowColor = this.isSuper ? '#fbbf24' : '#0284c7';
+                ctx.shadowBlur = 12;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 浮动文字特效类
+        class FloatingText {
+            constructor(text, x, y, color = '#f59e0b') {
+                this.text = text;
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.alpha = 1.0;
+                this.vy = -1.5;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.alpha -= 0.025;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.font = '900 16px Inter, sans-serif';
+                ctx.fillStyle = this.color;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        // 打击/攻击特效类 (拳脚视觉特效)
+        class AttackEffect {
+            constructor(x, y, dir, type = 'punch') {
+                this.x = x;
+                this.y = y;
+                this.dir = dir;
+                this.type = type;
+                this.life = 12;
+                this.maxLife = 12;
+            }
+
+            update() {
+                this.life--;
+            }
+
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                const progress = 1 - (this.life / this.maxLife);
+                ctx.globalAlpha = 1 - progress;
+
+                if (this.type.includes('punch')) {
+                    const radius = 10 + progress * 25;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = this.type.includes('heavy') ? '#f59e0b' : '#38bdf8';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (Math.PI * 2 / 6) * i;
+                        const innerR = radius * 0.5;
+                        const outerR = radius * 1.3;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
+                        ctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
+                        ctx.strokeStyle = '#fbbf24';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                } else if (this.type.includes('kick')) {
+                    ctx.scale(this.dir, 1);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 20 + progress * 20, -Math.PI / 3, Math.PI / 3);
+                    ctx.strokeStyle = this.type.includes('heavy') ? '#e11d48' : '#06b6d4';
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(5, 0, 15 + progress * 20, -Math.PI / 4, Math.PI / 4);
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // 火柴人角色类
+        class Stickman {
+            constructor(x, color, isAI = false) {
+                this.x = x;
+                this.y = GROUND_Y;
+                this.color = color;
+                this.isAI = isAI;
+
+                this.vx = 0;
+                this.vy = 0;
+                this.facing = isAI ? -1 : 1;
+
+                this.hp = 100;
+                this.state = 'idle'; // idle, move, attack, shoryuken, flyingkick, charging, knockdown, recovery
+                this.stateTimer = 0;
+                this.isGuard = false;
+                this.isInvincible = false;
+
+                this.chargeTimer = 0;
+                this.cmdBuffer = [];
+                this.currentAttackType = null;
+            }
+
+            handleCommandBuffer(key) {
+                const now = Date.now();
+                this.cmdBuffer.push({ key, time: now });
+                this.cmdBuffer = this.cmdBuffer.filter(c => now - c.time <= 1200);
+
+                const cmds = this.cmdBuffer.map(c => c.key);
+                const cmdStr = cmds.join('');
+
+                const forward = this.facing === 1 ? 'd' : 'a';
+                const isPunch = key === 'u' || key === 'j';
+                const isKick = key === 'i' || key === 'k';
+
+                if (this.state !== 'idle' && this.state !== 'move') return;
+
+                if (isPunch) {
+                    const sCount = cmds.filter(k => k === 's').length;
+                    const fCount = cmds.filter(k => k === forward).length;
+
+                    // 超级大波优先指令判定
+                    if (sCount >= 2 && fCount >= 2) {
+                        this.startSuperHadoukenCharge();
+                        this.cmdBuffer = [];
+                        return;
+                    }
+
+                    // 升龙拳: 前 下 前 + 拳
+                    if (cmdStr.includes(forward + 's' + forward) || (sCount >= 1 && fCount >= 2)) {
+                        this.performShoryuken();
+                        this.cmdBuffer = [];
+                        return;
+                    }
+
+                    // 普通波动拳: 下 前 + 拳
+                    if (cmdStr.includes('s' + forward) || (sCount >= 1 && fCount >= 1)) {
+                        this.performHadouken();
+                        this.cmdBuffer = [];
+                        return;
+                    }
+
+                    // 普通拳击
+                    this.performNormalAttack(key === 'j' ? 'heavy_punch' : 'punch');
+                    this.cmdBuffer = [];
+                    return;
+                }
+
+                // 迅猛飞踢: 下 前 + 脚
+                if (isKick) {
+                    if (cmdStr.includes('s' + forward) || (cmds.includes('s') && cmds.includes(forward))) {
+                        this.performFlyingKick();
+                        this.cmdBuffer = [];
+                        return;
+                    }
+
+                    // 普通脚踢
+                    this.performNormalAttack(key === 'k' ? 'heavy_kick' : 'kick');
+                    this.cmdBuffer = [];
+                    return;
+                }
+            }
+
+            performNormalAttack(type) {
+                this.state = 'attack';
+                this.stateTimer = 15;
+                this.currentAttackType = type;
+
+                // 如果处于下蹲状态按 K，切换为蹲重踢(扫堂腿)动作
+                if (type === 'heavy_kick' && keys['s'] && this.y === GROUND_Y) {
+                    this.currentAttackType = 'crouch_heavy_kick';
+                }
+
+                const effectX = this.x + this.facing * 30;
+                const effectY = type.includes('kick') ? (keys['s'] ? this.y - 10 : this.y - 20) : this.y - 35;
+                attackEffects.push(new AttackEffect(effectX, effectY, this.facing, type));
+            }
+
+            performHadouken() {
+                this.state = 'attack';
+                this.stateTimer = 30; // 0.5秒发波硬直
+                this.currentAttackType = 'hadouken';
+                this.isGuard = false;
+                projectiles.push(new Projectile(this.x + this.facing * 25, this.y - 35, this.facing, false));
+            }
+
+            performFlyingKick() {
+                this.state = 'flyingkick';
+                this.stateTimer = 35;
+                this.vx = this.facing * 8;
+                this.vy = -3;
+                this.isGuard = false;
+                attackEffects.push(new AttackEffect(this.x + this.facing * 20, this.y - 25, this.facing, 'heavy_kick'));
+            }
+
+            performShoryuken() {
+                this.state = 'shoryuken';
+                this.stateTimer = 45;
+                this.vy = -12;
+                this.vx = this.facing * 3;
+                this.isInvincible = true;
+                attackEffects.push(new AttackEffect(this.x + this.facing * 15, this.y - 45, this.facing, 'heavy_punch'));
+            }
+
+            startSuperHadoukenCharge() {
+                this.state = 'charging';
+                this.chargeTimer = 0;
+                this.isGuard = false;
+            }
+
+            releaseSuperHadouken() {
+                if (this.state === 'charging') {
+                    projectiles.push(new Projectile(this.x + this.facing * 30, this.y - 35, this.facing, true, this.chargeTimer));
+                    this.state = 'attack';
+                    this.stateTimer = 30;
+                    this.chargeTimer = 0;
+                }
+            }
+
+            takeHit(damage, isKnockdown = false, vx = 0, vy = 0) {
+                if (this.isInvincible) return;
+
+                if (this.isGuard && !isKnockdown) {
+                    this.hp -= damage * 0.1;
+                    return;
+                }
+
+                this.hp -= damage;
+                if (isKnockdown) {
+                    this.state = 'knockdown';
+                    this.stateTimer = 120; // 强制倒地 2 秒 (120帧)
+                    this.isInvincible = true;
+                    this.vx = vx;
+                    this.vy = vy;
+                } else {
+                    this.state = 'hit';
+                    this.stateTimer = 15;
+                }
+            }
+
+            update(opponent, projectiles, floatingTexts) {
+                if (this.state === 'idle' || this.state === 'move') {
+                    this.facing = opponent.x > this.x ? 1 : -1;
+                }
+
+                this.y += this.vy;
+                this.x += this.vx;
+
+                if (this.y < GROUND_Y) {
+                    this.vy += GRAVITY;
+                } else {
+                    this.y = GROUND_Y;
+                    this.vy = 0;
+                    this.vx *= 0.8;
+
+                    if (this.state === 'shoryuken' && this.stateTimer < 20) {
+                        this.state = 'recovery';
+                        this.stateTimer = 30; // 0.5s 落地僵直
+                        this.isInvincible = false;
+                    }
+                }
+
+                if (this.stateTimer > 0) {
+                    this.stateTimer--;
+                    if (this.stateTimer === 0) {
+                        if (this.state === 'knockdown') {
+                            this.isInvincible = false;
+                        }
+                        this.state = 'idle';
+                        this.isGuard = false;
+                    }
+                }
+
+                if (this.state === 'charging') {
+                    this.chargeTimer++;
+                    this.isGuard = false;
+
+                    projectiles.forEach((p) => {
+                        if (p.active && !p.isSuper && p.dir !== this.facing) {
+                            const dist = Math.hypot(p.x - this.x, p.y - (this.y - 35));
+                            if (dist < 40) {
+                                p.active = false;
+                                floatingTexts.push(new FloatingText("吞噬+1!", this.x, this.y - 60, '#f59e0b'));
+                            }
+                        }
+                    });
+
+                    if (!this.isAI && !keys['u'] && !keys['j']) {
+                        this.releaseSuperHadouken();
+                    }
+                }
+
+                if (!this.isAI && gameRunning && !isCountingDown) {
+                    this.handlePlayerMovement();
+                }
+
+                if (this.isAI && gameRunning && !isCountingDown) {
+                    this.handleAIBehavior(opponent);
+                }
+
+                this.x = Math.max(30, Math.min(GAME_WIDTH - 30, this.x));
+            }
+
+            handlePlayerMovement() {
+                if (this.state !== 'idle' && this.state !== 'move') return;
+
+                let speed = 2.2;
+                this.isGuard = false;
+
+                // 检测下蹲状态 (按 S 且在地面)
+                if (keys['s'] && this.y === GROUND_Y) {
+                    this.state = 'move'; // 保持移动状态以更新动画，具体姿态在 draw 中处理
+                    this.isGuard = true;  // 下蹲自动下段防御
+                    return;
+                }
+
+                if (keys['a']) {
+                    this.x -= speed;
+                    this.state = 'move';
+                    if (this.facing === 1) this.isGuard = true;
+                } else if (keys['d']) {
+                    this.x += speed;
+                    this.state = 'move';
+                    if (this.facing === -1) this.isGuard = true;
+                } else {
+                    this.state = 'idle';
+                }
+
+                if (keys['w'] && this.y === GROUND_Y) {
+                    this.vy = -11;
+                }
+            }
+
+            handleAIBehavior(opponent) {
+                if (this.state !== 'idle' && this.state !== 'move') return;
+
+                const dist = Math.abs(opponent.x - this.x);
+                let speed = 2.0;
+
+                const incomingProjectile = projectiles.find(p => p.active && p.dir !== this.facing && Math.abs(p.x - this.x) < 220);
+
+                if (incomingProjectile) {
+                    const projDist = Math.abs(incomingProjectile.x - this.x);
+                    if (projDist < 120 && this.y === GROUND_Y && Math.random() < 0.75) {
+                        this.vy = -11;
+                        this.vx = (Math.random() < 0.5 ? -1 : 1) * 2;
+                        return;
+                    } else if (projDist >= 120 && projDist < 200 && Math.random() < 0.35) {
+                        this.performHadouken();
+                        return;
+                    } else if (projDist < 150) {
+                        this.x -= this.facing * speed;
+                        this.isGuard = true;
+                        return;
+                    }
+                }
+
+                if (dist > 250) {
+                    if (Math.random() < 0.03) {
+                        this.performHadouken();
+                    } else if (Math.random() < 0.015) {
+                        this.performFlyingKick();
+                    } else {
+                        this.x += this.facing * speed;
+                    }
+                } else if (dist > 100) {
+                    if (opponent.state === 'attack' || opponent.state === 'shoryuken') {
+                        if (Math.random() < 0.05) this.performFlyingKick();
+                        else {
+                            this.x -= this.facing * speed;
+                            this.isGuard = true;
+                        }
+                    } else {
+                        if (Math.random() < 0.02) this.performHadouken();
+                        else this.x += this.facing * (speed * 0.8);
+                    }
+                } else {
+                    if (opponent.state === 'attack' || opponent.state === 'flyingkick') {
+                        this.isGuard = true;
+                        if (Math.random() < 0.04 && this.y === GROUND_Y) {
+                            this.performShoryuken();
+                        }
+                    } else if (Math.random() < 0.04) {
+                        this.performShoryuken();
+                    } else if (Math.random() < 0.03) {
+                        this.x -= this.facing * speed;
+                    } else {
+                        this.isGuard = Math.random() < 0.4;
+                    }
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (this.state === 'knockdown') {
+                    ctx.translate(0, -10);
+                    ctx.rotate((this.facing * Math.PI) / 2);
+                }
+
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+
+                const isCrouching = keys['s'] && !this.isAI && this.y === GROUND_Y && (this.state === 'idle' || this.state === 'move');
+
+                if (this.state === 'shoryuken') {
+                    ctx.beginPath();
+                    ctx.arc(0, -55, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, -45);
+                    ctx.lineTo(0, -20);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, -40); ctx.lineTo(15 * this.facing, -75);
+                    ctx.moveTo(0, -40); ctx.lineTo(-15 * this.facing, -25);
+                    ctx.moveTo(0, -20); ctx.lineTo(10 * this.facing, 5);
+                    ctx.moveTo(0, -20); ctx.lineTo(-12 * this.facing, -5);
+                    ctx.stroke();
+                } else if (this.state === 'flyingkick') {
+                    ctx.beginPath();
+                    ctx.arc(-10 * this.facing, -45, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(-10 * this.facing, -35);
+                    ctx.lineTo(5 * this.facing, -20);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(-5 * this.facing, -30); ctx.lineTo(-25 * this.facing, -25);
+                    ctx.moveTo(-5 * this.facing, -30); ctx.lineTo(-15 * this.facing, -15);
+                    ctx.moveTo(5 * this.facing, -20); ctx.lineTo(35 * this.facing, -20);
+                    ctx.moveTo(5 * this.facing, -20); ctx.lineTo(15 * this.facing, -5);
+                    ctx.stroke();
+                } else if (this.state === 'attack' && this.currentAttackType) {
+                    // --- 拳脚挥出动作 (Attack Motion Rendering) ---
+                    const isCrouchKick = this.currentAttackType === 'crouch_heavy_kick';
+                    const isKick = this.currentAttackType.includes('kick') && !isCrouchKick;
+                    const isPunch = this.currentAttackType.includes('punch');
+                    const isHadouken = this.currentAttackType === 'hadouken';
+
+                    if (isCrouchKick) {
+                        // 蹲重踢（扫堂腿）姿态：身体极低贴地，横向甩出强力下扫腿
+                        ctx.beginPath();
+                        ctx.arc(-8 * this.facing, -25, 9, 0, Math.PI * 2); // 低头部
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(-8 * this.facing, -18);
+                        ctx.lineTo(0, -8); // 贴地躯干
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(-5 * this.facing, -15); ctx.lineTo(-18 * this.facing, -22); // 后手臂支撑
+                        ctx.moveTo(-5 * this.facing, -15); ctx.lineTo(5 * this.facing, -12);
+                        ctx.moveTo(0, -8); ctx.lineTo(-12 * this.facing, 0);                 // 弯曲支撑腿
+                        ctx.moveTo(0, -8); ctx.lineTo(38 * this.facing, -2);                 // 贴地横扫长腿！
+                        ctx.stroke();
+                    } else {
+                        // 头部
+                        ctx.beginPath();
+                        ctx.arc(isKick ? -8 * this.facing : 0, -50, 10, 0, Math.PI * 2);
+                        ctx.stroke();
+
+                        // 躯干
+                        ctx.beginPath();
+                        ctx.moveTo(isKick ? -5 * this.facing : 0, -40);
+                        ctx.lineTo(0, -15);
+                        ctx.stroke();
+
+                        if (isPunch) {
+                            // 出拳姿势：前臂深度出击，后臂防护
+                            ctx.beginPath();
+                            ctx.moveTo(0, -35); ctx.lineTo(32 * this.facing, -35); // 直拳挥出
+                            ctx.moveTo(0, -35); ctx.lineTo(-10 * this.facing, -20); // 后臂护胸
+                            ctx.moveTo(0, -15); ctx.lineTo(-12 * this.facing, 0);   // 支撑后腿
+                            ctx.moveTo(0, -15); ctx.lineTo(12 * this.facing, 0);    // 弓步前腿
+                            ctx.stroke();
+                        } else if (isKick) {
+                            // 出腿姿势：上体后倾，前腿高高横踢
+                            ctx.beginPath();
+                            ctx.moveTo(-5 * this.facing, -32); ctx.lineTo(10 * this.facing, -22);  // 双臂平衡
+                            ctx.moveTo(-5 * this.facing, -32); ctx.lineTo(-18 * this.facing, -25);
+                            ctx.moveTo(0, -15); ctx.lineTo(35 * this.facing, -28);                 // 猛烈挥出高踢脚
+                            ctx.moveTo(0, -15); ctx.lineTo(-8 * this.facing, 0);                  // 支撑腿
+                            ctx.stroke();
+                        } else if (isHadouken) {
+                            // 发波姿势：双臂向前推展
+                            ctx.beginPath();
+                            ctx.moveTo(0, -35); ctx.lineTo(25 * this.facing, -38);
+                            ctx.moveTo(0, -35); ctx.lineTo(22 * this.facing, -30);
+                            ctx.moveTo(0, -15); ctx.lineTo(-12 * this.facing, 0);
+                            ctx.moveTo(0, -15); ctx.lineTo(10 * this.facing, 0);
+                            ctx.stroke();
+                        }
+                    }
+                } else if (isCrouching) {
+                    // --- 下蹲姿势 (Crouching Pose) ---
+                    ctx.beginPath();
+                    ctx.arc(0, -30, 9, 0, Math.PI * 2); // 头部下移
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, -22);
+                    ctx.lineTo(0, -10); // 躯干弯曲
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, -20); ctx.lineTo(10 * this.facing, -12); // 双臂护胸防御
+                    ctx.moveTo(0, -20); ctx.lineTo(-8 * this.facing, -12);
+                    ctx.moveTo(0, -10); ctx.lineTo(-14, 0);               // 深蹲弯曲双腿
+                    ctx.moveTo(0, -10); ctx.lineTo(14, 0);
+                    ctx.stroke();
+                } else {
+                    // 普通待机 / 移动姿势
+                    ctx.beginPath();
+                    ctx.arc(0, -50, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, -40);
+                    ctx.lineTo(0, -15);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, -35); ctx.lineTo(-12 * this.facing, -20);
+                    ctx.moveTo(0, -35); ctx.lineTo(12 * this.facing, -20);
+                    ctx.moveTo(0, -15); ctx.lineTo(-10, 0);
+                    ctx.moveTo(0, -15); ctx.lineTo(10, 0);
+                    ctx.stroke();
+                }
+
+                if (this.state === 'charging') {
+                    ctx.beginPath();
+                    ctx.arc(0, -35, 25 + Math.sin(Date.now() / 50) * 5, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        let player, ai;
+        let projectiles = [];
+        let attackEffects = [];
+        let floatingTexts = [];
+
+        function updateProjectiles() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                let p1 = projectiles[i];
+                if (!p1 || !p1.active) continue;
+
+                for (let j = i - 1; j >= 0; j--) {
+                    let p2 = projectiles[j];
+                    if (!p2 || !p2.active || p1.dir === p2.dir) continue;
+
+                    const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                    if (dist < p1.radius + p2.radius) {
+                        if (p1.isSuper && !p2.isSuper) {
+                            if (p1.devourSmallWave()) {
+                                p2.active = false;
+                                floatingTexts.push(new FloatingText("大波吞噬!", p1.x, p1.y - 20, '#f59e0b'));
+                                attackEffects.push(new AttackEffect(p2.x, p2.y, p1.dir, 'heavy_punch'));
+                            }
+                        } else if (p2.isSuper && !p1.isSuper) {
+                            if (p2.devourSmallWave()) {
+                                p1.active = false;
+                                floatingTexts.push(new FloatingText("大波吞噬!", p2.x, p2.y - 20, '#f59e0b'));
+                                attackEffects.push(new AttackEffect(p1.x, p1.y, p2.dir, 'heavy_punch'));
+                            }
+                        } else if (!p1.isSuper && !p2.isSuper) {
+                            p1.active = false;
+                            p2.active = false;
+                            floatingTexts.push(new FloatingText("波动相杀!", (p1.x + p2.x) / 2, p1.y - 20, '#38bdf8'));
+                            attackEffects.push(new AttackEffect((p1.x + p2.x) / 2, p1.y, 1, 'punch'));
+                        }
+                    }
+                }
+            }
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                let p = projectiles[i];
+                if (!p.active) {
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+
+                p.update();
+
+                [player, ai].forEach(target => {
+                    if (target.facing !== p.dir && p.active) {
+                        const dist = Math.hypot(p.x - target.x, p.y - (target.y - 35));
+                        if (dist < p.radius + 15) {
+                            p.active = false;
+                            target.takeHit(p.damage, p.isSuper, p.dir * (p.isSuper ? 8 : 3), p.isSuper ? -8 : -2);
+                            attackEffects.push(new AttackEffect(target.x, target.y - 35, p.dir, p.isSuper ? 'heavy_punch' : 'punch'));
+                            floatingTexts.push(new FloatingText(p.isSuper ? "大波重创!" : "命中!", target.x, target.y - 60, '#f43f5e'));
+                        }
+                    }
+                });
+            }
+        }
+
+        function checkAttackCollisions(attacker, defender) {
+            if (attacker.state === 'attack' && attacker.currentAttackType && attacker.stateTimer === 10) {
+                const dist = Math.abs(attacker.x - defender.x);
+                const isCrouchKick = attacker.currentAttackType === 'crouch_heavy_kick';
+                const hitDist = isCrouchKick ? 55 : 45; // 扫堂腿判定距离更长
+
+                if (dist < hitDist && Math.abs(attacker.y - defender.y) < 35) {
+                    const isHeavy = attacker.currentAttackType.includes('heavy');
+                    const dmg = isHeavy ? 12 : 6;
+                    defender.takeHit(dmg, isHeavy || isCrouchKick, attacker.facing * (isHeavy ? 5 : 2), isCrouchKick ? -6 : (isHeavy ? -4 : 0));
+                    attackEffects.push(new AttackEffect(defender.x, defender.y - (isCrouchKick ? 10 : 30), attacker.facing, attacker.currentAttackType));
+                    floatingTexts.push(new FloatingText(isCrouchKick ? "扫堂腿!" : (isHeavy ? "重击!" : "轻击!"), defender.x, defender.y - 50, '#38bdf8'));
+                }
+            }
+
+            if (attacker.state === 'shoryuken' && attacker.isInvincible) {
+                const dist = Math.hypot(attacker.x - defender.x, attacker.y - defender.y);
+                if (dist < 50) {
+                    defender.takeHit(25, true, attacker.facing * 6, -10);
+                    attackEffects.push(new AttackEffect(defender.x, defender.y - 40, attacker.facing, 'heavy_punch'));
+                    floatingTexts.push(new FloatingText("升龙破空!", defender.x, defender.y - 60, '#eab308'));
+                }
+            }
+
+            if (attacker.state === 'flyingkick' && attacker.stateTimer > 10) {
+                const dist = Math.hypot(attacker.x - defender.x, (attacker.y - 20) - (defender.y - 20));
+                if (dist < 45) {
+                    defender.takeHit(20, true, attacker.facing * 9, -5);
+                    attacker.vx = -attacker.facing * 3;
+                    attacker.stateTimer = 10;
+                    attackEffects.push(new AttackEffect(defender.x, defender.y - 25, attacker.facing, 'heavy_kick'));
+                    floatingTexts.push(new FloatingText("迅猛飞踢!", defender.x, defender.y - 60, '#38bdf8'));
+                }
+            }
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(0, GROUND_Y, GAME_WIDTH, 4);
+
+            if (!isCountingDown) {
+                player.update(ai, projectiles, floatingTexts);
+                ai.update(player, projectiles, floatingTexts);
+
+                checkAttackCollisions(player, ai);
+                checkAttackCollisions(ai, player);
+
+                updateProjectiles();
+            }
+
+            player.draw(ctx);
+            ai.draw(ctx);
+
+            projectiles.forEach(p => p.draw(ctx));
+
+            for (let i = attackEffects.length - 1; i >= 0; i--) {
+                let fx = attackEffects[i];
+                fx.update();
+                fx.draw(ctx);
+                if (fx.life <= 0) attackEffects.splice(i, 1);
+            }
+
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ft.update();
+                ft.draw(ctx);
+                if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+            }
+
+            drawUI();
+
+            if (!isCountingDown && (player.hp <= 0 || ai.hp <= 0)) {
+                gameRunning = false;
+                const overlay = document.getElementById('game-over-overlay');
+                const winnerText = document.getElementById('winner-text');
+                winnerText.textContent = player.hp > 0 ? '玩家 1 获胜!' : '电脑 AI 获胜!';
+                overlay.classList.remove('hidden');
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawUI() {
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(20, 20, 300, 20);
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillRect(20, 20, Math.max(0, player.hp * 3), 20);
+            ctx.strokeStyle = '#0284c7';
+            ctx.strokeRect(20, 20, 300, 20);
+
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(GAME_WIDTH - 320, 20, 300, 20);
+            ctx.fillStyle = '#f43f5e';
+            ctx.fillRect(GAME_WIDTH - 320 + (300 - Math.max(0, ai.hp * 3)), 20, Math.max(0, ai.hp * 3), 20);
+            ctx.strokeStyle = '#e11d48';
+            ctx.strokeRect(GAME_WIDTH - 320, 20, 300, 20);
+
+            ctx.font = '900 14px Inter, sans-serif';
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillText('P1 HEALTH', 20, 15);
+
+            ctx.fillStyle = '#f43f5e';
+            ctx.fillText('P2 HEALTH', GAME_WIDTH - 90, 15);
+        }
+
+        window.onload = () => {
+            player = new Stickman(200, '#38bdf8', false);
+            ai = new Stickman(600, '#f43f5e', true);
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(0, GROUND_Y, GAME_WIDTH, 4);
+            player.draw(ctx);
+            ai.draw(ctx);
+            drawUI();
+        };
+    </script>
+</body>
+</html>
